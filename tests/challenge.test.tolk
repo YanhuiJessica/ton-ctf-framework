@@ -42,6 +42,7 @@ fun setupTest(): (Challenge, Treasury, Treasury) {
     val notDeployer = testing.treasury("notDeployer");
 
     val contract = Challenge.fromStorage({
+        nonce: 0,
         childAddress: null,
         childDeployer: null,
         isSolved: false,

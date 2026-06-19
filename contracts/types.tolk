@@ -6,6 +6,7 @@ enum Errors {
 }
 
 struct ChallengeStorage {
+    nonce: uint64
     childAddress: address?
     childDeployer: address?
     isSolved: bool
