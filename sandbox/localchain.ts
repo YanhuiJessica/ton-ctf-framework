@@ -2,16 +2,17 @@ import { randomBytes, randomUUID } from 'crypto';
 import { mkdir, readFile, readdir, rm, writeFile } from 'fs/promises';
 import path from 'path';
 import { keyPairFromSecretKey, keyPairFromSeed } from '@ton/crypto';
-import { Address, ContractProvider, Sender, SendMode, toNano } from '@ton/core';
+import { Address, OpenedContract, SendMode, toNano } from '@ton/core';
 import { TonClient, WalletContractV3R2 } from '@ton/ton';
 import { deployChallengeInstance, isChallengeInstanceSolved } from './deploy-challenge';
+import { WalletContext } from './types';
 
 type WalletSecretInfo = {
     version: 'v3r2';
     workchain: number;
     walletId: number;
     address: Address;
-    privateKeySeedHex: string;
+    walletSeedHex: string;
     publicKeyHex: string;
 };
 
@@ -59,12 +60,6 @@ type LocalchainConfig = {
     sessionSweepIntervalMs: number;
 };
 
-type WalletContext = {
-    wallet: WalletContractV3R2;
-    provider: ContractProvider;
-    sender: Sender;
-};
-
 export class SessionLifecycleError extends Error {
     constructor(message: string, readonly statusCode: number) {
         super(message);
@@ -81,7 +76,6 @@ const closingSessions = new Set<string>();
 let sweeperStarted = false;
 let sharedTonClient: TonClient | undefined;
 let mainWalletContextPromise: Promise<WalletContext> | undefined;
-let mainWalletQueue: Promise<unknown> = Promise.resolve();
 
 const config: LocalchainConfig = {
     sessionDir: process.env.SESSION_DIR ?? path.join(process.cwd(), '.localchain-sessions'),
@@ -146,8 +140,8 @@ async function waitFor(condition: () => Promise<boolean>, timeoutMs: number, lab
     throw new Error(`Timed out while waiting for ${label}`);
 }
 
-async function waitForWalletSeqnoIncrease(wallet: WalletContractV3R2, provider: ContractProvider, currentSeqno: number) {
-    await waitFor(async () => (await wallet.getSeqno(provider)) > currentSeqno, config.waitTimeoutMs, 'wallet seqno to increase');
+async function waitForWalletSeqnoIncrease(wallet: OpenedContract<WalletContractV3R2>, currentSeqno: number) {
+    await waitFor(async () => (await wallet.getSeqno()) > currentSeqno, config.waitTimeoutMs, 'wallet seqno to increase');
 }
 
 async function waitForDeploy(client: TonClient, address: Address) {
@@ -158,47 +152,43 @@ function createWallet(client: TonClient, workchain: number) {
     const seed = randomBytes(32);
     const keyPair = keyPairFromSeed(seed);
     const walletId = Math.max(1, randomBytes(4).readUInt32BE(0) & 0x7fffffff);
-    const wallet = WalletContractV3R2.create({
+    const wallet = client.open(WalletContractV3R2.create({
         workchain,
         publicKey: keyPair.publicKey,
         walletId,
-    });
-    const provider = client.provider(wallet.address, wallet.init);
+    }));
 
     return {
         seed,
         keyPair,
         wallet,
-        provider,
-        sender: wallet.sender(provider, keyPair.secretKey),
+        sender: wallet.sender(keyPair.secretKey),
     };
 }
 
-function createWalletInfo(seed: Buffer, keyPair: ReturnType<typeof keyPairFromSeed>, wallet: WalletContractV3R2): WalletSecretInfo {
+function createWalletInfo(seed: Buffer, keyPair: ReturnType<typeof keyPairFromSeed>, wallet: OpenedContract<WalletContractV3R2>): WalletSecretInfo {
     return {
         version: 'v3r2',
         workchain: wallet.workchain,
         walletId: wallet.walletId,
         address: wallet.address,
-        privateKeySeedHex: seed.toString('hex'),
+        walletSeedHex: seed.toString('hex'),
         publicKeyHex: keyPair.publicKey.toString('hex'),
     };
 }
 
 function buildWalletContextFromSecretInfo(client: TonClient, walletInfo: WalletSecretInfo): WalletContext {
-    const seed = Buffer.from(walletInfo.privateKeySeedHex, 'hex');
+    const seed = Buffer.from(walletInfo.walletSeedHex, 'hex');
     const keyPair = keyPairFromSeed(seed);
-    const wallet = WalletContractV3R2.create({
+    const wallet = client.open(WalletContractV3R2.create({
         workchain: walletInfo.workchain,
         publicKey: keyPair.publicKey,
         walletId: walletInfo.walletId,
-    });
-    const provider = client.provider(wallet.address, wallet.init);
+    }));
 
     return {
         wallet,
-        provider,
-        sender: wallet.sender(provider, keyPair.secretKey),
+        sender: wallet.sender(keyPair.secretKey),
     };
 }
 
@@ -208,12 +198,33 @@ function getSessionPath(uuid: string) {
 
 async function saveSession(session: LocalchainSessionRecord) {
     await mkdir(config.sessionDir, { recursive: true });
-    await writeFile(getSessionPath(session.uuid), JSON.stringify(session, null, 2), 'utf8');
+    await writeFile(getSessionPath(session.uuid), JSON.stringify(session, (_key, value) => {
+        if (value instanceof Address) {
+            return value.toString();
+        }
+        return value;
+    }, 2), 'utf8');
 }
 
 async function loadSession(uuid: string) {
     const content = await readFile(getSessionPath(uuid), 'utf8');
-    return JSON.parse(content) as LocalchainSessionRecord;
+    const session = JSON.parse(content) as LocalchainSessionRecord;
+
+    session.player.address = parseStoredAddress(session.player.address);
+    session.challenge.address = parseStoredAddress(session.challenge.address);
+    return session;
+}
+
+function parseStoredAddress(value: unknown): Address {
+    if (value instanceof Address) {
+        return value;
+    }
+    
+    if (typeof value === 'string') {
+        return Address.parse(value);
+    }
+
+    throw new Error('invalid address');
 }
 
 function isExpired(session: LocalchainSessionRecord) {
@@ -248,17 +259,15 @@ async function getSharedMainWalletContext() {
             const key = parseSeed(await readFile(config.mainWalletKeyPath));
             const keyPair = key.length === 32 ? keyPairFromSeed(key) : keyPairFromSecretKey(key);
 
-            const wallet = WalletContractV3R2.create({
+            const wallet = client.open(WalletContractV3R2.create({
                 workchain: config.workchain,
                 publicKey: keyPair.publicKey,
                 walletId: config.mainWalletId,
-            });
-            const provider = client.provider(wallet.address, wallet.init);
+            }));
 
             return {
                 wallet,
-                provider,
-                sender: wallet.sender(provider, keyPair.secretKey),
+                sender: wallet.sender(keyPair.secretKey),
             };
         })().catch((error) => {
             mainWalletContextPromise = undefined;
@@ -270,7 +279,7 @@ async function getSharedMainWalletContext() {
 }
 
 async function fundWallet(client: TonClient, walletToFund: ReturnType<typeof createWallet>, mainWallet: WalletContext, amount: bigint) {
-    const currentSeqno = await mainWallet.wallet.getSeqno(mainWallet.provider);
+    const currentSeqno = await mainWallet.wallet.getSeqno();
 
     await mainWallet.sender.send({
         to: walletToFund.wallet.address,
@@ -279,15 +288,15 @@ async function fundWallet(client: TonClient, walletToFund: ReturnType<typeof cre
         init: walletToFund.wallet.init,
     });
 
-    await waitForWalletSeqnoIncrease(mainWallet.wallet, mainWallet.provider, currentSeqno);
+    await waitForWalletSeqnoIncrease(mainWallet.wallet, currentSeqno);
     await waitForDeploy(client, walletToFund.wallet.address);
 }
 
 async function deployChallenge(client: TonClient, mainWallet: WalletContext) {
-    const currentSeqno = await mainWallet.wallet.getSeqno(mainWallet.provider);
+    const currentSeqno = await mainWallet.wallet.getSeqno();
     const challenge = await deployChallengeInstance(client, mainWallet, config.challengeDeployValue);
 
-    await waitForWalletSeqnoIncrease(mainWallet.wallet, mainWallet.provider, currentSeqno);
+    await waitForWalletSeqnoIncrease(mainWallet.wallet, currentSeqno);
     await waitForDeploy(client, challenge.address);
 
     return challenge;
@@ -317,14 +326,14 @@ async function reclaimWalletBalance(client: TonClient, walletInfo: WalletSecretI
         return 0n;
     }
 
-    const currentSeqno = await walletContext.wallet.getSeqno(walletContext.provider);
+    const currentSeqno = await walletContext.wallet.getSeqno();
     await walletContext.sender.send({
         to: mainWalletAddress,
         value: 0n,
         bounce: false,
         sendMode: SendMode.CARRY_ALL_REMAINING_BALANCE + SendMode.DESTROY_ACCOUNT_IF_ZERO,
     });
-    await waitForWalletSeqnoIncrease(walletContext.wallet, walletContext.provider, currentSeqno).catch(() => undefined);
+    await waitForWalletSeqnoIncrease(walletContext.wallet, currentSeqno).catch(() => undefined);
 
     return balance;
 }

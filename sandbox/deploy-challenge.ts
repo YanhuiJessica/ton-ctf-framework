@@ -1,20 +1,15 @@
-import { Address, ContractProvider, Sender } from '@ton/core';
-import { TonClient, WalletContractV3R2 } from '@ton/ton';
+import { Address } from '@ton/core';
+import { TonClient } from '@ton/ton';
 import { Challenge } from '../wrappers-ts/Challenge.gen';
+import { WalletContext } from './types';
 
 export type ChallengeDeployment = {
     address: Address;
     nonce: bigint;
 };
 
-export type ChallengeDeployerContext = {
-    wallet: WalletContractV3R2;
-    provider: ContractProvider;
-    sender: Sender;
-};
-
-export async function deployChallengeInstance(client: TonClient, deployer: ChallengeDeployerContext, deployValue: bigint): Promise<ChallengeDeployment> {
-    const currentSeqno = await deployer.wallet.getSeqno(deployer.provider);
+export async function deployChallengeInstance(client: TonClient, deployer: WalletContext, deployValue: bigint): Promise<ChallengeDeployment> {
+    const currentSeqno = await deployer.wallet.getSeqno();
     const nonce = BigInt(currentSeqno);
     const challenge = client.open(Challenge.fromStorage({
         nonce,

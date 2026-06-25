@@ -279,7 +279,7 @@ function calculateDeployedAddress(code: c.Cell, data: c.Cell, options: DeployedA
 }
 
 export class Challenge implements c.Contract {
-    static CodeCell = c.Cell.fromBase64('te6ccgECCwEAAUYAART/APSkE/S88sgLAQIBYgIDBPjQ+JGRMOAg1ywgmbgADI7lW+1E0NM/+lD6UDHSANEBbvLgZIj4KMj6UslTAcjPhNDMzPkWyM+KAEDL/89QghAdzWUAyM+JCAFTNMjPhNDMzPkWzwv/AfoCgQCMzwtwE8zMyXD7APiSA8jLP/pUEvpUygDJ7VTgidcn4wIwBAUGBwIBIAkKART/APSkE/S88sgLCAAIEzcAAgBkMe1E0NM/+lD6UNIAMdEhbvLQZfiSIscF8uBmA/pIMCPHBfLgZwHIyz/6VPpUz4PJ7VQADscA3IQP8vAActP4kZEw4CDXLCCZuAAcMY4gMO1E0PpI0fiSyM+FCBL6UoIQEzcAAs8LjvpSyYBA+wDgxwDchA/y8AAXvdmPaiaGmfmP0oGEACO/dbdqJoaZ+Y/SgY/SgY64UAQ=');
+    static CodeCell = c.Cell.fromBase64('te6ccgECCwEAAUwAART/APSkE/S88sgLAQIBYgIDBPjQ+JGRMOAg1ywgmbgADI7lW+1E0NM/+lD6UDHSANEBbvLgZIj4KMj6UslTAcjPhNDMzPkWyM+KAEDL/89QghAL68IAyM+JCAFTNMjPhNDMzPkWzwv/AfoCgQCMzwtwE8zMyXD7APiSA8jLP/pUEvpUygDJ7VTgidcn4wIwBAUGBwIBIAkKART/APSkE/S88sgLCAAIEzcAAgBkMe1E0NM/+lD6UNIAMdEhbvLQZfiSIscF8uBmA/pIMCPHBfLgZwHIyz/6VPpUz4PJ7VQADscA3IQP8vAActP4kZEw4CDXLCCZuAAcMY4gMO1E0PpI0fiSyM+FCBL6UoIQEzcAAs8LjvpSyYBA+wDgxwDchA/y8AAjvdmPaiaGmfmP0ofSgY6QAY6MACO/dbdqJoaZ+Y/SgY/SgY6QBow=');
 
     static Errors = {
         'Errors.ChildAlreadyDeployed': 100,

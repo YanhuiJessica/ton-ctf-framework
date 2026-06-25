@@ -80,7 +80,6 @@ function respondWithError(res: ExpressResponse, error: unknown, fallbackMessage:
         return;
     }
 
-    console.error(fallbackMessage, error);
     res.status(500).json({ success: false, error: fallbackMessage });
 }
 
