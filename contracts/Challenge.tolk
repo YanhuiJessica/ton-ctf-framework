@@ -30,7 +30,7 @@ fun onInternalMessage(in: InMessage) {
 
             val deployMsg = createMessage({
                 bounce: false,
-                value: ton("0.5"),
+                value: ton("0.2"),
                 dest: { stateInit: childInit }
             });
             deployMsg.send(SEND_MODE_REGULAR);
@@ -59,11 +59,11 @@ fun onInternalMessage(in: InMessage) {
 fun onBouncedMessage(_: InMessageBounced) {}
 
 get fun childAddress(): address? {
-    val storage = lazy ChallengeStorage.load();
+    val storage = ChallengeStorage.load();
     return storage.childAddress
 }
 
 get fun isSolved(): bool {
-    val storage = lazy ChallengeStorage.load();
+    val storage = ChallengeStorage.load();
     return storage.isSolved
 }
