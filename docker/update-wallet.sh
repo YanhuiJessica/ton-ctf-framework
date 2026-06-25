@@ -35,4 +35,8 @@ if [ "${GENESIS:-false}" = "true" ] && [ "$REGENERATE_WALLETS" != "false" ] && [
   regenerate_wallets
 fi
 
+if [ "${GENESIS:-false}" = "true" ]; then
+  export HIDE_PRIVATE_KEYS=false
+fi
+
 exec /scripts/start-node.sh "$@"

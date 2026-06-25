@@ -1,0 +1,21 @@
+[package]
+name = "ton-ctf-framework"
+description = "TON CTF framework with example challenge contracts"
+version = "0.1.0"
+
+[toolchain]
+acton = "1.0.0"
+
+[contracts.ChallengeChild]
+src = "contracts/ChallengeChild.tolk"
+
+[contracts.Challenge]
+src = "contracts/Challenge.tolk"
+depends = ["ChallengeChild"]
+
+[import-mappings]
+acton = ".acton"
+contracts = "contracts"
+gen = "gen"
+tests = "tests"
+wrappers = "wrappers"
