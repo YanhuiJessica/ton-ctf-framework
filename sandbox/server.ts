@@ -48,7 +48,7 @@ function formatSession(session: LocalchainSessionView) {
         `uuid: ${session.uuid}`,
         `challenge contract: ${session.challenge.address.toString()}`,
         `api v2: ${session.apiV2Endpoint}`,
-        `your wallet version: v${session.player.version}`,
+        `your wallet version: ${session.player.version}`,
         `your wallet id: ${session.player.walletId}`,
         `seed: ${session.player.walletSeedHex}`,
     ];

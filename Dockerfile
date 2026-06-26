@@ -15,6 +15,7 @@ COPY . .
 
 RUN npm install
 RUN npm run build
+RUN npm run wrappers-ts
 
 EXPOSE 1337
 EXPOSE 3000
